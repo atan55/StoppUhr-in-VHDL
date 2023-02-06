@@ -1,0 +1,181 @@
+--Architektur:
+
+library IEEE; 
+use IEEE.STD_LOGIC_1164.ALL; 
+use IEEE.NUMERIC_STD.ALL; 
+use IEEE.STD_LOGIC_ARITH.ALL; 
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.STD_LOGIC_SIGNED.ALL; 
+
+entity StoppUhr is 
+    Port ( Start : in STD_LOGIC; 
+           Reset : in STD_LOGIC; 
+           Clk : in STD_LOGIC; 
+           Minuten : out STD_LOGIC_VECTOR (10 downto 0); --1023 
+           Sekunden : out STD_LOGIC_VECTOR (6 downto 0); --63 
+           Millisekunden : out STD_LOGIC_VECTOR (10 downto 0)); --1023 
+end StoppUhr; 
+
+architecture Behavioral of StoppUhr is 
+
+    signal m: integer range 0 to 1023; 
+    signal s: integer range 0 to 63; 
+    signal ms: integer range 0 to 1023; 
+
+begin 
+
+    P1: process(Start, Reset, Clk) is 
+        begin 
+        
+            if Reset = '1' then 
+                m <= 0; 
+                s <= 0; 
+                ms <= 0;  
+
+            elsif Start = '1' then 
+
+                if rising_edge(Clk) then 
+
+                    -- Logik 
+                    if ms < (1000-1) then                         
+                        ms <= ms + 1; 
+                    elsif ms >= (1000-1) then 
+                        ms <= 0; 
+                        if s < (60-1) then 
+                            s <= s+1; 
+                        elsif s >= (60-1) then 
+                            s <= 0; 
+                            m <= m+1; 
+                        end if; 
+                    end if; 
+                end if; 
+                
+            elsif Start = '0' then             
+            end if; 
+        end process P1; 
+
+        P2: process(m,s,ms) is  
+            begin 
+                Minuten <= std_logic_vector(to_unsigned(m, Minuten'length)); 
+                Sekunden <= std_logic_vector(to_unsigned(s, Sekunden'length)); 
+                Millisekunden <= std_logic_vector(to_unsigned(ms, Millisekunden'length));
+            end process P2; 
+end Behavioral; 
+
+
+################################################################################################################################################
+
+--Testbench:
+
+library IEEE; 
+use IEEE.STD_LOGIC_1164.ALL; 
+use IEEE.NUMERIC_STD.ALL; 
+use IEEE.STD_LOGIC_ARITH.ALL; 
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.STD_LOGIC_SIGNED.ALL; 
+ 
+entity StoppUhr_tb is 
+--  Port ( ); 
+end StoppUhr_tb; 
+
+architecture Behavioral of StoppUhr_tb is 
+
+    COMPONENT StoppUhr 
+    PORT( 
+           Start : in STD_LOGIC; 
+           Reset : in STD_LOGIC;  
+           Clk : in STD_LOGIC; 
+           Minuten : out STD_LOGIC_VECTOR (10 downto 0); 
+           Sekunden : out STD_LOGIC_VECTOR (6 downto 0); 
+           Millisekunden : out STD_LOGIC_VECTOR (10 downto 0) 
+        ); 
+    END COMPONENT;
+     
+    signal Start : STD_LOGIC; 
+    signal Reset : STD_LOGIC; 
+    signal Clk   : STD_LOGIC;
+    signal Minuten : STD_LOGIC_VECTOR(10 downto 0) := (others => '0'); 
+    signal Sekunden : STD_LOGIC_VECTOR(6 downto 0) := (others => '0'); 
+    signal Millisekunden : STD_LOGIC_VECTOR(10 downto 0) := (others => '0'); 
+    
+    constant clk_period : time := 1ms; 
+
+begin 
+    uut: StoppUhr Port Map( 
+       Start => Start, 
+       Reset => Reset, 
+       Clk => Clk, 
+       Minuten => Minuten, 
+       Sekunden => Sekunden, 
+       Millisekunden => Millisekunden 
+    ); 
+
+    clk_process: process 
+    begin 
+        clk <= '1'; 
+        wait for clk_period/2; 
+
+        clk <= '0'; 
+        wait for clk_period/2; 
+    end process; 
+
+    stim_proc: process 
+
+    begin 
+        
+        --Bild Clock-Signal
+        Reset <= '1'; 
+        wait for clk_period; 
+        Reset <= '0'; 
+        wait for clk_period; 
+
+        --Bild Sekunden
+        --Die Stoppuhr startet 
+        Start <= '1'; 
+        wait for clk_period * 20000; --20 Sekunden 
+        Start <= '0'; 
+        wait for clk_period * 4; 
+
+        --Bild Reset
+        --Nach dem Stopp wird getestet, ob die Stoppuhr wieder startet. 
+        Start <= '1'; 
+        wait for clk_period * 20000; 
+        Start <= '0'; 
+        wait for clk_period * 4; 
+        
+        --Bild Reset
+        --Nachdem die Stoppuhr 20 Sekunden gelaufen ist, wird das Reset-Signal getestet. 
+        Reset <= '1'; 
+        wait for clk_period * 4; 
+        Reset <= '0'; 
+        wait for clk_period * 4; 
+
+        --Bild ResetNachStopp
+        --Jetzt wird getestet, ob die Stoppuhr nach dem Stopp, zurückgesetzt wird, falls danach ein Reset kommt. 
+        Start <= '1'; 
+        wait for clk_period * 4; 
+        Start <= '0'; 
+        wait for clk_period * 4; 
+        Reset <= '1'; 
+        wait for clk_period * 4; 
+        Reset <= '0'; 
+        wait for clk_period * 4; 
+
+        --Bild Start nach Reset
+        --Nachdem Reset wird geguckt, ob die Uhr wieder von Beginn an läuft. Dazu wird getestet, ob die Uhr die Zeit 
+        --90 Minuten lang korrekt testet. 
+        Reset <= '1'; 
+        wait for clk_period * 4; 
+        Reset <= '0'; 
+        wait for clk_period * 4; 
+        Start <= '1'; 
+        
+        --Bild 90 Minuten
+        wait for clk_period * 60000 * 90; 
+        Start <= '0'; 
+        --Damit der Simulationsprozess nicht erneut startet, wird hier der Befehl wait benutzt. 
+        wait; 
+    end process;  
+
+end Behavioral; 
+
